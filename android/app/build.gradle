@@ -1,51 +1,10 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
-apply plugin: "com.facebook.react"
 
-react {
-    /* Folders */
-    //   The root of your project, i.e. where "package.json" lives. Default is '..'
-    // root = file("../")
-    //   The folder where the react-native NPM package is. Default is ../node_modules/react-native.
-    // reactNativeDir = file("../node_modules/react-native")
-    //   The folder where the react-native Codegen package is. Default is ../node_modules/@react-native/codegen
-    // codegenDir = file("../node_modules/@react-native/codegen")
-    //   The cli.js file which is the React Native CLI entrypoint. Default is ../node_modules/react-native/cli.js
-    // cliFile = file("../node_modules/react-native/cli.js")
-
-    /* Variants */
-    //   The list of variants to that are debuggable. For those we're going to
-    //   skip the bundling of the JS bundle and the assets. By default is just 'debug'.
-    //   If you add flavors like lite, prod, etc. you'll have to list your debuggableVariants.
-    // debuggableVariants = ["liteDebug", "prodDebug"]
-
-    /* Bundling */
-    //   A list containing the node command and its flags. Default is just 'node'.
-    // nodeExecutableAndArgs = ["node"]
-    //
-    //   The command to run when bundling. Default is 'bundle'
-    // bundleCommand = "ram-bundle"
-    //
-    //   The path to the CLI configuration file. Default is empty.
-    // bundleConfig = file(../rn-cli.config.js)
-    //
-    //   The name of the generated asset file containing your JS bundle
-    // bundleAssetName = "MyApplication.android.bundle"
-    //
-    //   The entry file for bundle generation. Default is 'index.android.js' or 'index.js'
-    // entryFile = file("../js/MyApplication.android.js")
-    //
-    //   A list of extra flags to pass to the 'bundle' commands.
-    //   See https://github.com/react-native-community/cli/blob/main/docs/commands.md#bundle
-    // extraPackagerArgs = []
-
-    /* Hermes Commands */
-    //   The hermes command to run. By default it is 'hermesc'
-    // hermesCommand = "$rootDir/my-custom-hermesc/bin/hermesc"
-    //
-    //   The list of flags to pass to the Hermes compiler. By default is "-O", "-output-source-map"
-    // hermesFlags = ["-O", "-output-source-map"]
-}
+def enableHermes = project.hasProperty("enableHermes") ? project.enableHermes : false
+def enableProguardInReleaseBuilds = false
+def enableSeparateBuildPerCPUArchitecture = false
+def jscFlavor = 'org.webkit:android-jsc:+'
 
 android {
     ndkVersion rootProject.ext.ndkVersion
@@ -58,61 +17,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
-        buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", isNewArchitectureEnabled().toString()
-
-        if (isNewArchitectureEnabled()) {
-            // We configure the CMake build only if you decide to opt-in for the New Architecture.
-            externalNativeBuild {
-                cmake {
-                    arguments "-DPROJECT_BUILD_DIR=$buildDir",
-                        "-DREACT_ANDROID_DIR=$rootDir/../node_modules/react-native/ReactAndroid",
-                        "-DREACT_ANDROID_BUILD_DIR=$rootDir/../node_modules/react-native/ReactAndroid/build",
-                        "-DNODE_MODULES_DIR=$rootDir/../node_modules",
-                        "-DANDROID_STL=c++_shared"
-                }
-            }
-        }
-    }
-
-    if (isNewArchitectureEnabled()) {
-        // We configure the NDK build only if you decide to opt-in for the New Architecture.
-        externalNativeBuild {
-            cmake {
-                path "$projectDir/src/main/jni/CMakeLists.txt"
-            }
-        }
-        def reactAndroidProjectDir = project(':ReactAndroid').projectDir
-        def packageReactNdkDebugLibs = tasks.register("packageReactNdkDebugLibs", Copy) {
-            dependsOn(":ReactAndroid:packageReactNdkDebugLibsForBuck")
-            from("$reactAndroidProjectDir/src/main/jni/prebuilt/lib")
-            into("$buildDir/react-ndk/exported")
-        }
-        def packageReactNdkReleaseLibs = tasks.register("packageReactNdkReleaseLibs", Copy) {
-            dependsOn(":ReactAndroid:packageReactNdkReleaseLibsForBuck")
-            from("$reactAndroidProjectDir/src/main/jni/prebuilt/lib")
-            into("$buildDir/react-ndk/exported")
-        }
-        afterEvaluate {
-            // If you wish to add a custom TurboModule or component locally,
-            // you should uncomment this line.
-            // preBuild.dependsOn("generateCodegenArtifactsFromSchema")
-            preDebugBuild.dependsOn(packageReactNdkDebugLibs)
-            preReleaseBuild.dependsOn(packageReactNdkReleaseLibs)
-
-            // Due to a bug inside AGP, we have to explicitly set a dependency
-            // between configureCMakeDebug* tasks and the preBuild tasks.
-            // This can be removed once this is solved: https://issuetracker.google.com/issues/207403732
-            configureCMakeRelWithDebInfo.dependsOn(packageReactNdkReleaseLibs)
-            configureCMakeDebug.dependsOn(packageReactNdkDebugLibs)
-            reactNativeArchitectures().each { architecture ->
-                tasks.findByName("configureCMakeDebug[${architecture}]")?.configure {
-                    dependsOn("packageReactNdkDebugLibs")
-                }
-                tasks.findByName("configureCMakeRelWithDebInfo[${architecture}]")?.configure {
-                    dependsOn("packageReactNdkReleaseLibs")
-                }
-            }
-        }
+        buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", "false"
     }
 
     splits {
@@ -162,14 +67,18 @@ android {
 }
 
 dependencies {
-    // The version of react-native is set by the React Native Gradle Plugin
-    implementation("com.facebook.react:react-android")
-
-    if (hermesEnabled.toBoolean()) {
-        implementation("com.facebook.react:hermes-android")
+    implementation "androidx.appcompat:appcompat:1.6.1"
+    implementation "com.google.android.material:material:1.9.0"
+    implementation "androidx.constraintlayout:constraintlayout:2.1.4"
+    
+    // React Native dependencies
+    implementation "com.facebook.react:react-native:0.73.2"
+    
+    if (enableHermes) {
+        def hermesPath = "../../node_modules/hermes-engine/android/"
+        debugImplementation files(hermesPath + "hermes-debug.aar")
+        releaseImplementation files(hermesPath + "hermes-release.aar")
     } else {
         implementation jscFlavor
     }
 }
-
-apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)
